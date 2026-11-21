@@ -93,7 +93,7 @@ impl PaymentEscrowContract {
     /// again and the failure is the same whichever path is retried.
     fn require_not_settled(escrow: &Escrow) -> Result<(), Error> {
         if Self::is_terminal(escrow) {
-            return Err(Error::EscrowNotPending);
+            return Err(Error::EscrowAlreadySettled);
         }
         Ok(())
     }
