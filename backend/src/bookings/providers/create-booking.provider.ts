@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Booking } from '../entities/booking.entity';
-import { CreateBookingDto } from '../dto/create-booking.dto';
+import { CreateBookingDto, isStrictBookingDate } from '../dto/create-booking.dto';
 import { CreateRecurringBookingDto } from '../dto/create-recurring-booking.dto';
 import { RecurrenceFrequency } from '../enums/recurrence-frequency.enum';
 import { RecurringBookingConflictException } from '../exceptions/recurring-booking-conflict.exception';
@@ -75,7 +75,7 @@ export class CreateBookingProvider {
   ) {}
 
   async create(dto: CreateBookingDto, userId: string, now: Date = new Date()): Promise<Booking> {
-    if (new Date(dto.endDate) <= new Date(dto.startDate)) {
+    if (!isStrictBookingDate(dto.startDate) || !isStrictBookingDate(dto.endDate)) {\n      throw new BadRequestException(\n        'startDate and endDate must be YYYY-MM-DD or ISO timestamps with an explicit timezone',\n      );\n    }\n    if (Date.parse(dto.endDate) <= Date.parse(dto.startDate)) {
       throw new BadRequestException('endDate must be after startDate');
     }
     if (startDateIsInPast(dto.startDate, now)) {
