@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { CreateBookingProvider } from './create-booking.provider';
+import { isStrictBookingDate } from '../dto/create-booking.dto';
 import { BookingStatus } from '../enums/booking-status.enum';
 import { Workspace } from '../../workspaces/entities/workspace.entity';
 
@@ -334,5 +335,69 @@ describe('CreateBookingProvider interval overlap checks', () => {
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('strict booking date validation (BE-25)', () => {
+  it.each([
+    '2026-02-30',
+    '2026-13-01',
+    '2026-04-31',
+    '2026-10-17T09:30:00',
+    '2026-10-17T09:30:00.1234Z',
+    '2026-10-17T24:00:00Z',
+    '2026-10-17T09:60:00Z',
+    '2026-10-17T09:30:60Z',
+    '2026-10-17T09:30:00+14:01',
+    'not-a-date',
+    '',
+  ])('rejects invalid or ambiguous input: %s', (value) => {
+    expect(isStrictBookingDate(value)).toBe(false);
+  });
+
+  it.each([
+    '2026-02-28',
+    '2024-02-29',
+    '2026-10-17T09:30:00Z',
+    '2026-10-17T09:30:00.123Z',
+    '2026-10-17T10:30:00+01:00',
+    '2026-10-17T00:00:00-14:00',
+  ])('accepts documented date/instant format: %s', (value) => {
+    expect(isStrictBookingDate(value)).toBe(true);
+  });
+
+  it('compares offset timestamps as instants and rejects equal or reversed boundaries', () => {
+    const start = '2026-10-17T10:00:00+01:00';
+    expect(Date.parse('2026-10-17T10:00:01+01:00')).toBeGreaterThan(Date.parse(start));
+    expect(Date.parse('2026-10-17T09:00:00Z')).toBe(Date.parse(start));
+    expect(Date.parse('2026-10-17T08:59:59Z')).toBeLessThan(Date.parse(start));
+  });
+
+  it('rejects malformed booking dates before opening a transaction', async () => {
+    const transaction = jest.fn();
+    const provider = new CreateBookingProvider(
+      {} as never,
+      {} as never,
+      {} as never,
+      { transaction } as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      provider.create(
+        {
+          workspaceId: 'workspace-1',
+          planType: 'hourly' as never,
+          startDate: '2026-10-17T10:00:00',
+          endDate: '2026-10-18T10:00:00Z',
+          seatCount: 1,
+        },
+        'user-1',
+        FIXED_NOW,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transaction).not.toHaveBeenCalled();
   });
 });
